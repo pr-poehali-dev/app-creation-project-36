@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS orders (
+  id TEXT PRIMARY KEY,
+  number TEXT NOT NULL UNIQUE,
+  client TEXT NOT NULL,
+  drink_name TEXT NOT NULL,
+  sku TEXT NOT NULL,
+  can_format TEXT NOT NULL DEFAULT '0.33',
+  packaging_type TEXT NOT NULL DEFAULT 'sleeve',
+  quantity INTEGER NOT NULL,
+  planned_production_date DATE NOT NULL,
+  planned_shipment_date DATE NOT NULL,
+  line_id TEXT,
+  line_speed INTEGER NOT NULL DEFAULT 2000,
+  cleaning_time INTEGER NOT NULL DEFAULT 30,
+  manager TEXT NOT NULL DEFAULT '',
+  comment TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'new',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)

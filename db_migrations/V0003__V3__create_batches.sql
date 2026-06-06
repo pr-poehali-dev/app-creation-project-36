@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS batches (
+  id TEXT PRIMARY KEY,
+  order_id TEXT,
+  name TEXT NOT NULL,
+  client TEXT NOT NULL,
+  sku TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  speed INTEGER NOT NULL,
+  cleaning_time INTEGER NOT NULL DEFAULT 30,
+  line_id TEXT NOT NULL,
+  color TEXT DEFAULT '#0ea5e9',
+  status TEXT NOT NULL DEFAULT 'new',
+  start_time TIMESTAMPTZ,
+  end_time TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)

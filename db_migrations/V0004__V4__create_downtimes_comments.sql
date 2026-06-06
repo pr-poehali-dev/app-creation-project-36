@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS downtimes (
+  id TEXT PRIMARY KEY,
+  batch_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  minutes INTEGER NOT NULL DEFAULT 0,
+  color TEXT DEFAULT '#f59e0b',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS comments (
+  id TEXT PRIMARY KEY,
+  batch_id TEXT,
+  order_id TEXT,
+  author TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
