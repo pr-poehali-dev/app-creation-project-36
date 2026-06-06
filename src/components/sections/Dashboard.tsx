@@ -120,7 +120,7 @@ export default function Dashboard() {
               {activeBatches.map(b => {
                 const progress = calcProgress(b);
                 const made = Math.round(b.quantity * progress / 100);
-                const lineNames: Record<string, string> = { 'line-1': 'Линия №1', 'line-2': 'Линия №2', 'line-3': 'Линия №3' };
+                const lineNames: Record<string, string> = { 'line-1': 'Элеваторная', 'line-2': 'Линия №2', 'line-3': 'Линия №3' };
                 return (
                   <div key={b.id} className="rounded-lg bg-secondary/40 p-3 border border-border/50">
                     <div className="flex items-start justify-between mb-2">

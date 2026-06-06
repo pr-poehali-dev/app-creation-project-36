@@ -3,7 +3,7 @@ import Icon from '@/components/ui/icon';
 import type { OrderCreatePayload } from '@/api/client';
 
 const LINES = [
-  { id: 'line-1', name: 'Линия №1', speed: 2000 },
+  { id: 'line-1', name: 'Элеваторная', speed: 9100 },
   { id: 'line-2', name: 'Линия №2', speed: 1800 },
   { id: 'line-3', name: 'Линия №3', speed: 2400 },
 ];

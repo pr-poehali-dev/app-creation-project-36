@@ -30,7 +30,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const CAN_FORMATS: Record<string, string> = { '0.33': '0.33 л', '0.45': '0.45 л', '0.5': '0.5 л' };
 const PACK_TYPES: Record<string, string> = { sleeve: 'Sleeve', litography: 'Литография' };
-const LINE_NAMES: Record<string, string> = { 'line-1': 'Линия №1', 'line-2': 'Линия №2', 'line-3': 'Линия №3' };
+const LINE_NAMES: Record<string, string> = { 'line-1': 'Элеваторная', 'line-2': 'Линия №2', 'line-3': 'Линия №3' };
 
 // Диалог подтверждения удаления
 function DeleteDialog({ order, onConfirm, onCancel, loading }: {
