@@ -1,6 +1,7 @@
 const ORDERS_URL = 'https://functions.poehali.dev/9219b44f-8281-497f-a1ba-dffc09e79a90';
 const BATCHES_URL = 'https://functions.poehali.dev/cd44fb15-1abb-46a6-95b3-7bc41c9bd733';
 const MATERIALS_URL = 'https://functions.poehali.dev/7c14d9a2-e67f-4257-a70f-5cd1aab59c85';
+const REORDER_URL = 'https://functions.poehali.dev/cd57421d-4b23-45e6-8c75-267ca44c0c73';
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(url, {
@@ -31,6 +32,7 @@ export interface OrderFromDB {
   manager: string;
   comment: string;
   status: string;
+  order_index: number;
   created_at: string;
   updated_at: string;
 }
@@ -49,9 +51,11 @@ export interface BatchFromDB {
   status: string;
   start_time: string;
   end_time: string;
+  order_index: number;
   created_at: string;
   updated_at: string;
 }
+
 
 export interface MaterialFromDB {
   id: string;
@@ -88,6 +92,41 @@ export interface MaterialCheckResult {
   checked_at: string | null;
   items: MaterialCheckItem[];
 }
+
+export interface ReorderBatchesPayload {
+  batch_id: string;
+  new_line_id: string;
+  ordered_ids: string[];
+  old_line_id?: string;
+}
+
+export interface ReorderResult {
+  updated_new_line: BatchFromDB[];
+  updated_old_line: BatchFromDB[];
+}
+
+export const reorderApi = {
+  batches: (payload: ReorderBatchesPayload) =>
+    request<ReorderResult>(`${REORDER_URL}/?action=batches`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  orders: (orderedIds: string[]) =>
+    request<{ updated: number }>(`${REORDER_URL}/?action=orders`, {
+      method: 'POST',
+      body: JSON.stringify({ ordered_ids: orderedIds }),
+    }),
+  moveToProduction: (orderId: string, lineId: string, position?: number) =>
+    request<{ batch_id: string; updated_line: BatchFromDB[] }>(`${REORDER_URL}/?action=move-to-production`, {
+      method: 'POST',
+      body: JSON.stringify({ order_id: orderId, line_id: lineId, position }),
+    }),
+  removeFromProduction: (batchId: string) =>
+    request<{ removed: string; updated_line: BatchFromDB[] }>(`${REORDER_URL}/?action=remove-from-production`, {
+      method: 'POST',
+      body: JSON.stringify({ batch_id: batchId }),
+    }),
+};
 
 export interface OrderCreatePayload {
   client: string;

@@ -1,6 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import Icon from '@/components/ui/icon';
-import { ordersApi, type OrderFromDB, type OrderCreatePayload } from '@/api/client';
+import { ordersApi, reorderApi, type OrderFromDB, type OrderCreatePayload } from '@/api/client';
 import OrderForm from '@/components/orders/OrderForm';
 import MaterialCheckBlock from '@/components/orders/MaterialCheckBlock';
 
@@ -31,6 +49,120 @@ const STATUS_COLORS: Record<string, string> = {
 const CAN_FORMATS: Record<string, string> = { '0.33': '0.33 л', '0.45': '0.45 л', '0.5': '0.5 л' };
 const PACK_TYPES: Record<string, string> = { sleeve: 'Sleeve', litography: 'Литография' };
 const LINE_NAMES: Record<string, string> = { 'line-1': 'Элеваторная', 'line-2': 'Ленина', 'line-3': 'Линия №3' };
+
+// ─── Sortable table row ───
+function SortableOrderRow({
+  order,
+  onSelect,
+  onEdit,
+  onDelete,
+}: {
+  order: OrderFromDB;
+  onSelect: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: order.id,
+    data: { type: 'order', order },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+  };
+
+  const dl = Math.ceil((new Date(order.planned_shipment_date).getTime() - Date.now()) / 86400000);
+  const isUrgent = dl <= 3;
+
+  return (
+    <tr ref={setNodeRef} style={style}
+      className={`border-b border-border/40 transition-colors ${isDragging ? 'opacity-30 bg-primary/5' : 'hover:bg-secondary/20'}`}>
+      {/* Drag handle */}
+      <td className="px-3 py-3 w-8">
+        <div {...attributes} {...listeners}
+          className="cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors">
+          <Icon name="GripVertical" size={13} />
+        </div>
+      </td>
+      <td className="px-4 py-3 cursor-pointer" onClick={onSelect}>
+        <div className="font-mono-vpk text-xs text-primary">{order.number}</div>
+      </td>
+      <td className="px-4 py-3 cursor-pointer" onClick={onSelect}>
+        <div className="text-sm font-medium text-foreground">{order.client}</div>
+        {order.manager && <div className="text-[10px] text-muted-foreground">{order.manager}</div>}
+      </td>
+      <td className="px-4 py-3 cursor-pointer" onClick={onSelect}>
+        <div className="text-xs text-foreground">{order.drink_name}</div>
+        <div className="text-[10px] text-muted-foreground">{order.sku} · {CAN_FORMATS[order.can_format] || order.can_format}</div>
+      </td>
+      <td className="px-4 py-3 cursor-pointer" onClick={onSelect}>
+        <div className="text-xs text-muted-foreground">{LINE_NAMES[order.line_id] || order.line_id}</div>
+      </td>
+      <td className="px-4 py-3 text-right cursor-pointer" onClick={onSelect}>
+        <span className="font-mono-vpk text-sm text-foreground">{order.quantity.toLocaleString('ru')}</span>
+        <span className="text-[10px] text-muted-foreground ml-1">шт</span>
+      </td>
+      <td className="px-4 py-3 cursor-pointer" onClick={onSelect}>
+        <div className="text-xs text-muted-foreground font-mono-vpk">
+          {new Date(order.planned_production_date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}
+        </div>
+      </td>
+      <td className="px-4 py-3 cursor-pointer" onClick={onSelect}>
+        <div className={`text-xs font-mono-vpk ${isUrgent ? 'text-red-400 font-bold' : 'text-muted-foreground'}`}>
+          {new Date(order.planned_shipment_date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}
+        </div>
+        {isUrgent && dl > 0 && <div className="text-[10px] text-red-400">через {dl}д</div>}
+        {dl <= 0 && <div className="text-[10px] text-red-500 font-bold">просрочен</div>}
+      </td>
+      <td className="px-4 py-3 cursor-pointer" onClick={onSelect}>
+        <div className="flex flex-col gap-1">
+          <span className={`status-badge ${STATUS_COLORS[order.status] || 'bg-slate-500/20 text-slate-300'}`}>
+            {STATUS_LABELS[order.status] || order.status}
+          </span>
+          {order.status === 'check_materials' && (
+            <span className="flex items-center gap-1 text-[10px] text-red-400">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500" />нехватка сырья
+            </span>
+          )}
+          {order.status === 'ready' && (
+            <span className="flex items-center gap-1 text-[10px] text-emerald-400">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />сырьё готово
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1">
+          <button onClick={e => { e.stopPropagation(); onEdit(); }}
+            className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-secondary transition-colors">
+            <Icon name="Pencil" size={12} />
+          </button>
+          <button onClick={e => { e.stopPropagation(); onDelete(); }}
+            className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-secondary transition-colors">
+            <Icon name="Trash2" size={12} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// Ghost row for drag overlay
+function DragOrderGhost({ order }: { order: OrderFromDB }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 bg-card border-2 border-primary/50 rounded-lg shadow-2xl opacity-95 w-[500px] rotate-1">
+      <Icon name="GripVertical" size={13} className="text-muted-foreground/40" />
+      <div className="font-mono-vpk text-xs text-primary shrink-0">{order.number}</div>
+      <div className="text-sm font-medium text-foreground truncate">{order.client}</div>
+      <div className="text-xs text-muted-foreground truncate flex-1">{order.drink_name}</div>
+      <span className={`status-badge text-[10px] shrink-0 ${STATUS_COLORS[order.status] || 'bg-slate-500/20 text-slate-300'}`}>
+        {STATUS_LABELS[order.status] || order.status}
+      </span>
+    </div>
+  );
+}
 
 // Диалог подтверждения удаления
 function DeleteDialog({ order, onConfirm, onCancel, loading }: {
@@ -181,8 +313,10 @@ function OrderDetail({ order, onClose, onEdit, onDelete, onStatusChange, onReloa
 }
 
 export default function Orders({ search }: { search: string }) {
-  const [orders, setOrders] = useState<OrderFromDB[]>([]);
+  // Полный список — мастер порядка
+  const [allOrders, setAllOrders] = useState<OrderFromDB[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<OrderFromDB | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editOrder, setEditOrder] = useState<OrderFromDB | null>(null);
@@ -190,22 +324,42 @@ export default function Orders({ search }: { search: string }) {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
+  const [activeDrag, setActiveDrag] = useState<OrderFromDB | null>(null);
+  const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string> = {};
-      if (search) params.search = search;
-      if (statusFilter !== 'all') params.status = statusFilter;
-      if (dateFilter) params.production_date = dateFilter;
-      const data = await ordersApi.list(params);
-      setOrders(data);
+      // Загружаем всегда без фильтров для поддержания полного порядка
+      const data = await ordersApi.list();
+      setAllOrders(data.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)));
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, dateFilter]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Фильтрация поверх полного списка — не меняет порядок
+  const orders = allOrders.filter(o => {
+    if (statusFilter !== 'all' && o.status !== statusFilter) return false;
+    if (dateFilter && o.planned_production_date !== dateFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (
+        !o.client.toLowerCase().includes(q) &&
+        !o.drink_name.toLowerCase().includes(q) &&
+        !o.number.toLowerCase().includes(q) &&
+        !o.sku.toLowerCase().includes(q)
+      ) return false;
+    }
+    return true;
+  });
 
   const handleCreate = async (data: OrderCreatePayload) => {
     await ordersApi.create(data);
@@ -234,15 +388,52 @@ export default function Orders({ search }: { search: string }) {
 
   const handleStatusChange = async (order: OrderFromDB, status: string) => {
     await ordersApi.update(order.id, { status });
-    await load();
-    if (selected?.id === order.id) {
-      setSelected(prev => prev ? { ...prev, status } : null);
-    }
+    setAllOrders(prev => prev.map(o => o.id === order.id ? { ...o, status } : o));
+    if (selected?.id === order.id) setSelected(prev => prev ? { ...prev, status } : null);
+  };
+
+  // ─── DnD handlers ───
+  const handleDragStart = (e: DragStartEvent) => {
+    const o = allOrders.find(x => x.id === e.active.id);
+    if (o) setActiveDrag(o);
+  };
+
+  const handleDragEnd = async (e: DragEndEvent) => {
+    setActiveDrag(null);
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+
+    // Работаем с отфильтрованным списком для индексов
+    const oldIdx = orders.findIndex(o => o.id === active.id);
+    const newIdx = orders.findIndex(o => o.id === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+
+    // Обновляем порядок в полном списке
+    const reorderedFiltered = arrayMove(orders, oldIdx, newIdx);
+
+    // Перестраиваем полный список, сохраняя новый порядок отфильтрованных
+    const filteredIds = new Set(orders.map(o => o.id));
+    const others = allOrders.filter(o => !filteredIds.has(o.id));
+    const merged = [...reorderedFiltered, ...others].map((o, i) => ({ ...o, order_index: i }));
+    setAllOrders(merged);
+
+    // Дебаунс сохранения
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    saveTimeout.current = setTimeout(async () => {
+      setSaving(true);
+      try {
+        await reorderApi.orders(merged.map(o => o.id));
+      } catch {
+        load(); // откат при ошибке
+      } finally {
+        setSaving(false);
+      }
+    }, 400);
   };
 
   const statuses = ['all', ...STATUS_FLOW];
 
-  const daysLeft = (date: string) => Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
+  const isFiltered = statusFilter !== 'all' || !!dateFilter || !!search;
 
   return (
     <div className="p-6 animate-fade-in">
@@ -257,6 +448,12 @@ export default function Orders({ search }: { search: string }) {
           ))}
         </div>
         <div className="flex items-center gap-2 ml-auto">
+          {saving && (
+            <span className="flex items-center gap-1.5 text-xs text-primary">
+              <div className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              Сохраняю порядок...
+            </span>
+          )}
           <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)}
             className="bg-secondary/50 border border-border rounded-md px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
           {dateFilter && (
@@ -272,109 +469,73 @@ export default function Orders({ search }: { search: string }) {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-lg border border-border overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-secondary/40 border-b border-border">
-              {['Номер', 'Клиент', 'Напиток / SKU', 'Линия', 'Объём', 'Дата пр-ва', 'Отгрузка', 'Статус', ''].map(h => (
-                <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={9} className="text-center py-12 text-muted-foreground text-sm">
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                  Загрузка...
-                </div>
-              </td></tr>
-            ) : orders.length === 0 ? (
-              <tr><td colSpan={9} className="text-center py-12 text-muted-foreground text-sm">
-                <Icon name="ClipboardList" size={32} className="mx-auto mb-2 opacity-30" />
-                <div>Заказов нет</div>
-                <button onClick={() => setShowForm(true)} className="mt-3 text-primary text-xs hover:underline">
-                  Создать первый заказ →
-                </button>
-              </td></tr>
-            ) : orders.map(o => {
-              const dl = daysLeft(o.planned_shipment_date);
-              const isUrgent = dl <= 3;
-              return (
-                <tr key={o.id} onClick={() => setSelected(o)}
-                  className="table-row-hover cursor-pointer border-b border-border/40">
-                  <td className="px-4 py-3">
-                    <div className="font-mono-vpk text-xs text-primary">{o.number}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="text-sm font-medium text-foreground">{o.client}</div>
-                    {o.manager && <div className="text-[10px] text-muted-foreground">{o.manager}</div>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="text-xs text-foreground">{o.drink_name}</div>
-                    <div className="text-[10px] text-muted-foreground">{o.sku} · {CAN_FORMATS[o.can_format] || o.can_format}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="text-xs text-muted-foreground">{LINE_NAMES[o.line_id] || o.line_id}</div>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="font-mono-vpk text-sm text-foreground">{o.quantity.toLocaleString('ru')}</span>
-                    <span className="text-[10px] text-muted-foreground ml-1">шт</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="text-xs text-muted-foreground font-mono-vpk">
-                      {new Date(o.planned_production_date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}
+      {isFiltered && (
+        <div className="flex items-center gap-1.5 mb-3 text-xs text-muted-foreground bg-secondary/30 rounded-md px-3 py-2">
+          <Icon name="Filter" size={12} />
+          Активны фильтры — DnD сортирует в рамках текущего фильтра
+          <button onClick={() => { setStatusFilter('all'); setDateFilter(''); }}
+            className="ml-auto text-primary hover:underline">Сбросить</button>
+        </div>
+      )}
+
+      {/* Table with DnD */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="rounded-lg border border-border overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-secondary/40 border-b border-border">
+                <th className="w-8 px-3 py-2.5" />
+                {['Номер', 'Клиент', 'Напиток / SKU', 'Линия', 'Объём', 'Дата пр-ва', 'Отгрузка', 'Статус', ''].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <SortableContext items={orders.map(o => o.id)} strategy={verticalListSortingStrategy}>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={10} className="text-center py-12 text-muted-foreground text-sm">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                      Загрузка...
                     </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className={`text-xs font-mono-vpk ${isUrgent ? 'text-red-400 font-bold' : 'text-muted-foreground'}`}>
-                      {new Date(o.planned_shipment_date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}
-                    </div>
-                    {isUrgent && dl > 0 && <div className="text-[10px] text-red-400">через {dl}д</div>}
-                    {dl <= 0 && <div className="text-[10px] text-red-500 font-bold">просрочен</div>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-1">
-                      <span className={`status-badge ${STATUS_COLORS[o.status] || 'bg-slate-500/20 text-slate-300'}`}>
-                        {STATUS_LABELS[o.status] || o.status}
-                      </span>
-                      {o.status === 'check_materials' && (
-                        <span className="flex items-center gap-1 text-[10px] text-red-400">
-                          <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                          нехватка сырья
-                        </span>
-                      )}
-                      {o.status === 'ready' && (
-                        <span className="flex items-center gap-1 text-[10px] text-emerald-400">
-                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          сырьё готово
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                      <button onClick={() => { setEditOrder(o); setShowForm(true); }}
-                        className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-secondary transition-colors">
-                        <Icon name="Pencil" size={12} />
+                  </td></tr>
+                ) : orders.length === 0 ? (
+                  <tr><td colSpan={10} className="text-center py-12 text-muted-foreground text-sm">
+                    <Icon name="ClipboardList" size={32} className="mx-auto mb-2 opacity-30" />
+                    <div>Заказов нет</div>
+                    {!isFiltered && (
+                      <button onClick={() => setShowForm(true)} className="mt-3 text-primary text-xs hover:underline">
+                        Создать первый заказ →
                       </button>
-                      <button onClick={() => setDeleteTarget(o)}
-                        className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-secondary transition-colors">
-                        <Icon name="Trash2" size={12} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    )}
+                  </td></tr>
+                ) : orders.map(o => (
+                  <SortableOrderRow
+                    key={o.id}
+                    order={o}
+                    onSelect={() => setSelected(o)}
+                    onEdit={() => { setEditOrder(o); setShowForm(true); }}
+                    onDelete={() => setDeleteTarget(o)}
+                  />
+                ))}
+              </tbody>
+            </SortableContext>
+          </table>
+        </div>
+
+        <DragOverlay dropAnimation={{ duration: 180, easing: 'ease' }}>
+          {activeDrag && <DragOrderGhost order={activeDrag} />}
+        </DragOverlay>
+      </DndContext>
 
       {!loading && orders.length > 0 && (
         <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-          <span>Показано {orders.length} заказов</span>
+          <span>Показано {orders.length} из {allOrders.length} заказов</span>
           <span className="font-mono-vpk">
             Итого: {orders.reduce((s, o) => s + o.quantity, 0).toLocaleString('ru')} шт
           </span>

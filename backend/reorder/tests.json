@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "POST orders без ordered_ids — ошибка 400",
+      "method": "POST",
+      "path": "/?action=orders",
+      "body": {},
+      "expectedStatus": 400,
+      "bodyMatcher": "partial"
+    }
+  ]
+}

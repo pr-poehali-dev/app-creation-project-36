@@ -20,7 +20,7 @@ ORDER_COLS = [
     "id", "number", "client", "drink_name", "sku", "can_format",
     "packaging_type", "quantity", "planned_production_date", "planned_shipment_date",
     "line_id", "line_speed", "cleaning_time", "manager", "comment",
-    "status", "created_at", "updated_at"
+    "status", "order_index", "created_at", "updated_at"
 ]
 
 BATCH_COLS = [
@@ -211,7 +211,7 @@ def handler(event: dict, context) -> dict:
             if params.get("production_date"):
                 where_parts.append(f"planned_production_date = {escape(params['production_date'])}")
             where = " AND ".join(where_parts)
-            cur.execute(f"SELECT {', '.join(ORDER_COLS)} FROM {SCHEMA}.orders WHERE {where} ORDER BY created_at DESC")
+            cur.execute(f"SELECT {', '.join(ORDER_COLS)} FROM {SCHEMA}.orders WHERE {where} ORDER BY order_index ASC, created_at DESC")
             rows = cur.fetchall()
             return resp(200, [row_to_dict(r, ORDER_COLS) for r in rows])
 

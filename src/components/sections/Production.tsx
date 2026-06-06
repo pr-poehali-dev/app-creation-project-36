@@ -1,6 +1,25 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+  type DragOverEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import Icon from '@/components/ui/icon';
-import { batchesApi, type BatchFromDB } from '@/api/client';
+import { batchesApi, reorderApi, type BatchFromDB } from '@/api/client';
 
 const LINES = [
   { id: 'line-1', name: 'Элеваторная', speed: 9100 },
@@ -12,6 +31,12 @@ const LINE_MAP: Record<string, string> = {
   'line-1': 'Элеваторная',
   'line-2': 'Ленина',
   'line-3': 'Линия №3',
+};
+
+const LINE_COLORS_CSS: Record<string, string> = {
+  'line-1': '#0ea5e9',
+  'line-2': '#f97316',
+  'line-3': '#8b5cf6',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -73,218 +98,89 @@ function totalMinutes(batch: BatchFromDB): number {
   return Math.round((new Date(batch.end_time).getTime() - new Date(batch.start_time).getTime()) / 60000);
 }
 
-// ───── Табличный вид (как на скриншоте) ─────
-function TableView({ batches, search, onSelect }: {
-  batches: BatchFromDB[];
-  search: string;
-  onSelect: (b: BatchFromDB) => void;
-}) {
-  const [showDone, setShowDone] = useState(false);
-
-  const filtered = batches
-    .filter(b => {
-      if (!showDone && b.status === 'produced') return false;
-      if (!search) return true;
-      const q = search.toLowerCase();
-      return b.name.toLowerCase().includes(q) || b.client.toLowerCase().includes(q);
-    })
-    .sort((a, b) => {
-      if (!a.start_time) return 1;
-      if (!b.start_time) return -1;
-      return new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
-    });
-
+// ─── Drag Overlay Card (ghost while dragging) ───
+function DragCard({ batch }: { batch: BatchFromDB }) {
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-muted-foreground">{filtered.length} партий</span>
-        <button
-          onClick={() => setShowDone(p => !p)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all ${showDone ? 'bg-primary/15 border border-primary/30 text-primary' : 'bg-secondary text-muted-foreground hover:text-foreground'}`}
-        >
-          <Icon name={showDone ? 'EyeOff' : 'Eye'} size={12} />
-          {showDone ? 'Скрыть выполненные' : 'Показать выполненные'}
-        </button>
+    <div className="rounded-lg border-2 border-primary/60 bg-card/95 p-3 shadow-2xl w-64 rotate-2 opacity-90">
+      <div className="flex items-center gap-2 mb-1">
+        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: batch.color || '#0ea5e9' }} />
+        <div className="text-sm font-semibold text-foreground truncate">{batch.name}</div>
       </div>
-
-      <div className="rounded-lg border border-border overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-secondary/40 border-b border-border">
-              <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide w-12">#</th>
-              <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Название</th>
-              <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Линия</th>
-              <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Кол-во (шт)</th>
-              <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Скорость (шт/ч)</th>
-              <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Пауза (мин)</th>
-              <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Старт</th>
-              <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Окончание</th>
-              <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Статус</th>
-              <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr><td colSpan={10} className="text-center py-10 text-muted-foreground text-sm">
-                <Icon name="Factory" size={28} className="mx-auto mb-2 opacity-20" />
-                Нет партий
-              </td></tr>
-            ) : filtered.map((b, idx) => {
-              const active = isActive(b);
-              const progress = active ? calcProgress(b) : 0;
-              const mins = totalMinutes(b);
-              const isDone = b.status === 'produced';
-
-              return (
-                <tr
-                  key={b.id}
-                  onClick={() => onSelect(b)}
-                  className={`table-row-hover cursor-pointer border-b border-border/40 ${active ? 'bg-primary/5' : isDone ? 'opacity-50' : ''}`}
-                >
-                  {/* # */}
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: b.color || '#0ea5e9' }} />
-                      <span className="text-xs text-muted-foreground font-mono-vpk">{idx + 1}</span>
-                    </div>
-                  </td>
-                  {/* Название */}
-                  <td className="px-3 py-2.5 max-w-xs">
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <div className="text-sm font-medium text-foreground leading-tight">{b.name}</div>
-                        <div className="text-[10px] text-muted-foreground">{b.client}</div>
-                      </div>
-                      {active && (
-                        <div className="shrink-0">
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary pulse-glow" />
-                        </div>
-                      )}
-                    </div>
-                    {active && (
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <div className="flex-1 h-1 bg-border rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-primary transition-all"
-                            style={{ width: `${progress}%` }} />
-                        </div>
-                        <span className="text-[10px] font-mono-vpk text-primary shrink-0">{progress}%</span>
-                      </div>
-                    )}
-                  </td>
-                  {/* Линия */}
-                  <td className="px-3 py-2.5">
-                    <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary font-medium">
-                      {LINE_MAP[b.line_id] || b.line_id}
-                    </span>
-                  </td>
-                  {/* Кол-во */}
-                  <td className="px-3 py-2.5 text-right">
-                    <span className="font-mono-vpk text-sm text-foreground font-semibold">
-                      {b.quantity.toLocaleString('ru')}
-                    </span>
-                  </td>
-                  {/* Скорость */}
-                  <td className="px-3 py-2.5 text-right">
-                    <span className="font-mono-vpk text-sm text-foreground">{b.speed.toLocaleString('ru')}</span>
-                  </td>
-                  {/* Пауза (мойка) */}
-                  <td className="px-3 py-2.5 text-right">
-                    <span className="font-mono-vpk text-sm text-foreground">{b.cleaning_time}</span>
-                  </td>
-                  {/* Старт */}
-                  <td className="px-3 py-2.5">
-                    <div className="text-xs font-mono-vpk text-foreground whitespace-nowrap">
-                      {b.start_time ? new Date(b.start_time).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground font-mono-vpk">
-                      {timeStr(b.start_time)}
-                    </div>
-                  </td>
-                  {/* Окончание */}
-                  <td className="px-3 py-2.5">
-                    <div className="text-xs font-mono-vpk text-foreground whitespace-nowrap">
-                      {b.end_time ? new Date(b.end_time).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground font-mono-vpk">
-                      {timeStr(b.end_time)}
-                    </div>
-                  </td>
-                  {/* Статус */}
-                  <td className="px-3 py-2.5 text-center">
-                    <span className={`status-badge text-[10px] ${STATUS_COLORS[b.status] || 'bg-slate-500/20 text-slate-300'}`}>
-                      {STATUS_LABELS[b.status] || b.status}
-                    </span>
-                  </td>
-                  {/* Действия */}
-                  <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-center gap-1">
-                      <button className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-secondary transition-colors" title="Редактировать">
-                        <Icon name="Pencil" size={11} />
-                      </button>
-                      <button className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-emerald-400 hover:bg-secondary transition-colors" title="Копировать">
-                        <Icon name="Copy" size={11} />
-                      </button>
-                      <button className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-secondary transition-colors" title="Удалить">
-                        <Icon name="Trash2" size={11} />
-                      </button>
-                      <button className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-orange-400 hover:bg-secondary transition-colors" title="Пауза">
-                        <Icon name="Pause" size={11} />
-                      </button>
-                      <button className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-cyan-400 hover:bg-secondary transition-colors" title="Комментарий">
-                        <Icon name="MessageSquare" size={11} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="text-[11px] text-muted-foreground">{batch.client}</div>
+      <div className="text-[11px] font-mono-vpk text-muted-foreground mt-1">
+        {batch.quantity.toLocaleString('ru')} шт · {batch.speed.toLocaleString('ru')}/ч
       </div>
-
-      {/* Итоги */}
-      {filtered.length > 0 && (
-        <div className="flex items-center justify-between mt-3 px-1 text-xs text-muted-foreground font-mono-vpk">
-          <span>Партий: {filtered.length}</span>
-          <span>
-            Итого: {filtered.reduce((s, b) => s + b.quantity, 0).toLocaleString('ru')} шт ·{' '}
-            {Math.round(filtered.reduce((s, b) => s + totalMinutes(b), 0) / 60)}ч
-          </span>
-        </div>
-      )}
     </div>
   );
 }
 
-// ───── Карточный вид (колонки по линиям) ─────
-function BatchCard({ batch, onSelect }: { batch: BatchFromDB; onSelect: () => void }) {
+// ─── Sortable Batch Card (board view) ───
+function SortableBatchCard({
+  batch,
+  onSelect,
+  isDragging,
+}: {
+  batch: BatchFromDB;
+  onSelect: () => void;
+  isDragging: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging: selfDragging } = useSortable({
+    id: batch.id,
+    data: { type: 'batch', batch, lineId: batch.line_id },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: selfDragging ? 0.3 : 1,
+  };
+
   const active = isActive(batch);
   const progress = calcProgress(batch);
-  const made = Math.round(batch.quantity * progress / 100);
   const mins = totalMinutes(batch);
 
   return (
-    <div onClick={onSelect}
-      className={`relative rounded-lg border p-3 cursor-pointer transition-all duration-200 hover:border-primary/40 ${
-        active ? 'border-primary/50 bg-primary/5 glow-primary' : 'border-border bg-secondary/30 hover:bg-secondary/50'
-      }`}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className={`relative rounded-lg border p-3 transition-all duration-150 ${
+        selfDragging ? 'border-primary/30 bg-secondary/20' :
+        active ? 'border-primary/50 bg-primary/5' :
+        'border-border bg-secondary/30 hover:border-primary/30 hover:bg-secondary/50'
+      } ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+    >
+      {/* Drag handle */}
+      <div
+        {...listeners}
+        className="absolute top-2 right-2 p-1 rounded text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing"
+        onClick={e => e.stopPropagation()}
+      >
+        <Icon name="GripVertical" size={13} />
+      </div>
+
       {active && (
-        <div className="absolute top-2 right-2 flex items-center gap-1">
+        <div className="absolute top-2 left-2 flex items-center gap-1">
           <div className="w-1.5 h-1.5 rounded-full bg-primary pulse-glow" />
-          <span className="text-[10px] text-primary font-semibold">В РАБОТЕ</span>
+          <span className="text-[9px] text-primary font-semibold">В РАБОТЕ</span>
         </div>
       )}
-      <div className="flex items-start gap-2 mb-2 pr-16">
+
+      <div
+        onClick={onSelect}
+        className="flex items-start gap-2 mb-2 pr-8 pt-1 cursor-pointer"
+      >
         <div className="w-2.5 h-2.5 rounded-full mt-0.5 shrink-0" style={{ background: batch.color || '#0ea5e9' }} />
         <div>
           <div className="text-sm font-semibold text-foreground leading-tight">{batch.name}</div>
           <div className="text-[11px] text-muted-foreground">{batch.client}</div>
         </div>
       </div>
+
       {active && (
-        <div className="mb-2">
+        <div className="mb-2" onClick={onSelect}>
           <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-            <span>{made.toLocaleString('ru')} / {batch.quantity.toLocaleString('ru')}</span>
+            <span>{Math.round(batch.quantity * progress / 100).toLocaleString('ru')} / {batch.quantity.toLocaleString('ru')}</span>
             <span className="font-mono-vpk">{progress}%</span>
           </div>
           <div className="h-1 bg-border rounded-full overflow-hidden">
@@ -293,7 +189,8 @@ function BatchCard({ batch, onSelect }: { batch: BatchFromDB; onSelect: () => vo
           </div>
         </div>
       )}
-      <div className="grid grid-cols-3 gap-2 text-[10px] font-mono-vpk mb-2">
+
+      <div onClick={onSelect} className="grid grid-cols-3 gap-1 text-[10px] font-mono-vpk mb-2 cursor-pointer">
         <div className="text-center">
           <div className="text-muted-foreground">Старт</div>
           <div className="text-foreground">{timeStr(batch.start_time)}</div>
@@ -310,7 +207,8 @@ function BatchCard({ batch, onSelect }: { batch: BatchFromDB; onSelect: () => vo
           <div className="text-muted-foreground/60">{batch.speed}/ч</div>
         </div>
       </div>
-      <div className="flex items-center gap-2 flex-wrap">
+
+      <div onClick={onSelect} className="flex items-center gap-2 flex-wrap cursor-pointer">
         <span className={`status-badge text-[10px] ${STATUS_COLORS[batch.status] || 'bg-slate-500/20 text-slate-300'}`}>
           {STATUS_LABELS[batch.status] || batch.status}
         </span>
@@ -322,6 +220,300 @@ function BatchCard({ batch, onSelect }: { batch: BatchFromDB; onSelect: () => vo
   );
 }
 
+// ─── Drop zone column ───
+function DroppableColumn({
+  line,
+  batches,
+  onSelect,
+  isDraggingOver,
+  isDragging,
+}: {
+  line: typeof LINES[0];
+  batches: BatchFromDB[];
+  onSelect: (b: BatchFromDB) => void;
+  isDraggingOver: boolean;
+  isDragging: boolean;
+}) {
+  const totalMins = batches.reduce((s, b) => s + totalMinutes(b), 0);
+  const activeBatch = batches.find(b => isActive(b));
+
+  return (
+    <div className={`rounded-xl border transition-all duration-200 overflow-hidden ${
+      isDraggingOver
+        ? 'border-primary/60 bg-primary/5 shadow-lg shadow-primary/10'
+        : 'border-border bg-card'
+    }`}>
+      {/* Header */}
+      <div className={`flex items-center justify-between px-4 py-3 border-b transition-colors ${
+        isDraggingOver ? 'border-primary/30 bg-primary/8' : 'border-border bg-secondary/30'
+      }`}>
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full transition-all ${
+            isDraggingOver ? 'bg-primary scale-125' :
+            activeBatch ? 'bg-primary pulse-glow' : 'bg-border'
+          }`} />
+          <span className="text-sm font-semibold text-foreground">{line.name}</span>
+          {isDraggingOver && (
+            <span className="text-[10px] text-primary font-medium animate-pulse">Отпустите здесь</span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-[10px] text-muted-foreground font-mono-vpk">{line.speed.toLocaleString('ru')}/ч</div>
+          <span className="text-[10px] text-muted-foreground font-mono-vpk bg-secondary px-1.5 py-0.5 rounded">
+            {batches.length}
+          </span>
+        </div>
+      </div>
+
+      {/* Sortable list */}
+      <SortableContext items={batches.map(b => b.id)} strategy={verticalListSortingStrategy}>
+        <div className={`p-3 space-y-2.5 min-h-[120px] transition-colors ${
+          isDraggingOver ? 'bg-primary/3' : ''
+        }`}>
+          {batches.length === 0 ? (
+            <div className={`flex flex-col items-center justify-center h-24 rounded-lg border-2 border-dashed transition-colors ${
+              isDraggingOver ? 'border-primary/50 text-primary' : 'border-border/40 text-muted-foreground/30'
+            } text-xs`}>
+              <Icon name="Plus" size={20} className="mb-1 opacity-50" />
+              {isDraggingOver ? 'Добавить сюда' : 'Нет партий'}
+            </div>
+          ) : batches.map(batch => (
+            <SortableBatchCard
+              key={batch.id}
+              batch={batch}
+              onSelect={() => onSelect(batch)}
+              isDragging={isDragging}
+            />
+          ))}
+        </div>
+      </SortableContext>
+
+      <div className="px-4 py-2.5 border-t border-border bg-secondary/20 flex justify-between text-[10px] text-muted-foreground font-mono-vpk">
+        <span>Партий: {batches.length}</span>
+        <span>{Math.floor(totalMins / 60)}ч {totalMins % 60}м</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Таблица с DnD ───
+function SortableTableRow({
+  batch,
+  index,
+  onSelect,
+}: {
+  batch: BatchFromDB;
+  index: number;
+  onSelect: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: batch.id,
+    data: { type: 'batch', batch, lineId: batch.line_id },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+  };
+
+  const active = isActive(batch);
+  const progress = calcProgress(batch);
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`border-b border-border/40 transition-colors ${
+        active ? 'bg-primary/5' : 'hover:bg-secondary/30'
+      } ${isDragging ? 'opacity-30' : ''}`}
+    >
+      <td className="px-3 py-2.5">
+        <div
+          {...attributes}
+          {...listeners}
+          className="flex items-center gap-1.5 cursor-grab active:cursor-grabbing"
+        >
+          <Icon name="GripVertical" size={13} className="text-muted-foreground/40" />
+          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: batch.color || '#0ea5e9' }} />
+          <span className="text-xs text-muted-foreground font-mono-vpk">{index + 1}</span>
+        </div>
+      </td>
+      <td className="px-3 py-2.5 max-w-xs" onClick={onSelect}>
+        <div className="flex items-center gap-2 cursor-pointer">
+          <div>
+            <div className="text-sm font-medium text-foreground leading-tight">{batch.name}</div>
+            <div className="text-[10px] text-muted-foreground">{batch.client}</div>
+          </div>
+          {active && <div className="w-1.5 h-1.5 rounded-full bg-primary pulse-glow shrink-0" />}
+        </div>
+        {active && (
+          <div className="mt-1.5 flex items-center gap-2">
+            <div className="flex-1 h-1 bg-border rounded-full overflow-hidden">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
+            </div>
+            <span className="text-[10px] font-mono-vpk text-primary shrink-0">{progress}%</span>
+          </div>
+        )}
+      </td>
+      <td className="px-3 py-2.5" onClick={onSelect}>
+        <span className="text-xs px-2 py-0.5 rounded font-medium cursor-pointer"
+          style={{ background: `${LINE_COLORS_CSS[batch.line_id]}20`, color: LINE_COLORS_CSS[batch.line_id] }}>
+          {LINE_MAP[batch.line_id] || batch.line_id}
+        </span>
+      </td>
+      <td className="px-3 py-2.5 text-right" onClick={onSelect}>
+        <span className="font-mono-vpk text-sm text-foreground font-semibold cursor-pointer">
+          {batch.quantity.toLocaleString('ru')}
+        </span>
+      </td>
+      <td className="px-3 py-2.5 text-right" onClick={onSelect}>
+        <span className="font-mono-vpk text-sm text-foreground cursor-pointer">{batch.speed.toLocaleString('ru')}</span>
+      </td>
+      <td className="px-3 py-2.5 text-right" onClick={onSelect}>
+        <span className="font-mono-vpk text-sm text-foreground cursor-pointer">{batch.cleaning_time}</span>
+      </td>
+      <td className="px-3 py-2.5" onClick={onSelect}>
+        <div className="text-xs font-mono-vpk text-foreground cursor-pointer whitespace-nowrap">
+          {batch.start_time ? new Date(batch.start_time).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
+        </div>
+        <div className="text-[10px] text-muted-foreground font-mono-vpk">{timeStr(batch.start_time)}</div>
+      </td>
+      <td className="px-3 py-2.5" onClick={onSelect}>
+        <div className="text-xs font-mono-vpk text-foreground cursor-pointer whitespace-nowrap">
+          {batch.end_time ? new Date(batch.end_time).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
+        </div>
+        <div className="text-[10px] text-muted-foreground font-mono-vpk">{timeStr(batch.end_time)}</div>
+      </td>
+      <td className="px-3 py-2.5 text-center" onClick={onSelect}>
+        <span className={`status-badge text-[10px] cursor-pointer ${STATUS_COLORS[batch.status] || 'bg-slate-500/20 text-slate-300'}`}>
+          {STATUS_LABELS[batch.status] || batch.status}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+function TableView({
+  batches,
+  onSelect,
+  onBatchesReorder,
+}: {
+  batches: BatchFromDB[];
+  onSelect: (b: BatchFromDB) => void;
+  onBatchesReorder: (updated: BatchFromDB[]) => void;
+}) {
+  const [showDone, setShowDone] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const filtered = batches
+    .filter(b => showDone || b.status !== 'produced')
+    .sort((a, b) => a.order_index - b.order_index || new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+  );
+
+  const [activeItem, setActiveItem] = useState<BatchFromDB | null>(null);
+
+  const handleDragStart = (e: DragStartEvent) => {
+    const b = filtered.find(x => x.id === e.active.id);
+    if (b) setActiveItem(b);
+  };
+
+  const handleDragEnd = async (e: DragEndEvent) => {
+    setActiveItem(null);
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = filtered.findIndex(b => b.id === active.id);
+    const newIndex = filtered.findIndex(b => b.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(filtered, oldIndex, newIndex).map((b, i) => ({ ...b, order_index: i }));
+    onBatchesReorder(reordered);
+
+    setSaving(true);
+    try {
+      const dragged = filtered[oldIndex];
+      await reorderApi.batches({
+        batch_id: dragged.id,
+        new_line_id: dragged.line_id,
+        ordered_ids: reordered.map(b => b.id),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{filtered.length} партий</span>
+          {saving && (
+            <span className="flex items-center gap-1 text-[10px] text-primary">
+              <div className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              Сохраняю...
+            </span>
+          )}
+        </div>
+        <button onClick={() => setShowDone(p => !p)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all ${showDone ? 'bg-primary/15 border border-primary/30 text-primary' : 'bg-secondary text-muted-foreground hover:text-foreground'}`}>
+          <Icon name={showDone ? 'EyeOff' : 'Eye'} size={12} />
+          {showDone ? 'Скрыть выполненные' : 'Показать выполненные'}
+        </button>
+      </div>
+
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="rounded-lg border border-border overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-secondary/40 border-b border-border">
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide w-12">#</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Название</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Линия</th>
+                <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Кол-во (шт)</th>
+                <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Скорость</th>
+                <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Пауза</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Старт</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Окончание</th>
+                <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Статус</th>
+              </tr>
+            </thead>
+            <SortableContext items={filtered.map(b => b.id)} strategy={verticalListSortingStrategy}>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr><td colSpan={9} className="text-center py-10 text-muted-foreground text-sm">
+                    <Icon name="Factory" size={28} className="mx-auto mb-2 opacity-20" />Нет партий
+                  </td></tr>
+                ) : filtered.map((b, idx) => (
+                  <SortableTableRow key={b.id} batch={b} index={idx} onSelect={() => onSelect(b)} />
+                ))}
+              </tbody>
+            </SortableContext>
+          </table>
+        </div>
+        <DragOverlay>
+          {activeItem && <DragCard batch={activeItem} />}
+        </DragOverlay>
+      </DndContext>
+
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between mt-3 px-1 text-xs text-muted-foreground font-mono-vpk">
+          <span>Партий: {filtered.length}</span>
+          <span>
+            Итого: {filtered.reduce((s, b) => s + b.quantity, 0).toLocaleString('ru')} шт ·{' '}
+            {Math.round(filtered.reduce((s, b) => s + totalMinutes(b), 0) / 60)}ч
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Detail modal ───
 function BatchDetail({ batch, onClose }: { batch: BatchFromDB; onClose: () => void }) {
   const progress = calcProgress(batch);
   const made = Math.round(batch.quantity * progress / 100);
@@ -351,14 +543,12 @@ function BatchDetail({ batch, onClose }: { batch: BatchFromDB; onClose: () => vo
             <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
               <div className="flex justify-between text-xs mb-2">
                 <span className="text-primary font-semibold flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary pulse-glow" />
-                  В РАБОТЕ
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary pulse-glow" />В РАБОТЕ
                 </span>
                 <span className="font-mono-vpk text-foreground">{progress}%</span>
               </div>
               <div className="h-2 bg-border rounded-full overflow-hidden mb-2">
-                <div className="h-full rounded-full transition-all"
-                  style={{ width: `${progress}%`, background: batch.color || '#0ea5e9' }} />
+                <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, background: batch.color || '#0ea5e9' }} />
               </div>
               <div className="flex gap-4 text-[11px] text-muted-foreground font-mono-vpk">
                 <span>Произведено: <span className="text-foreground">{made.toLocaleString('ru')}</span></span>
@@ -403,61 +593,153 @@ function BatchDetail({ batch, onClose }: { batch: BatchFromDB; onClose: () => vo
   );
 }
 
-// ───── Главный компонент ─────
+// ─── Главный компонент ───
 export default function Production({ search }: { search: string }) {
   const [batches, setBatches] = useState<BatchFromDB[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<BatchFromDB | null>(null);
-  const [lineFilter, setLineFilter] = useState<string>('line-1');
-  const [viewMode, setViewMode] = useState<'table' | 'board'>('table');
+  const [lineFilter, setLineFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'table' | 'board'>('board');
   const [, setTick] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [overId, setOverId] = useState<string | null>(null); // line_id куда перетаскивают
+  const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+  );
 
   const load = useCallback(async () => {
     try {
       const data = await batchesApi.list();
-      setBatches(data);
+      setBatches(data.sort((a, b) => a.order_index - b.order_index));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
   useEffect(() => {
     const t = setInterval(() => setTick(p => p + 1), 30000);
     return () => clearInterval(t);
   }, []);
 
-  const getForLine = (lineId: string) =>
-    batches.filter(b => b.line_id === lineId).sort((a, b) => {
-      if (!a.start_time) return 1;
-      if (!b.start_time) return -1;
-      return new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
+  const getBatchesForLine = useCallback((lineId: string) => {
+    return batches
+      .filter(b => b.line_id === lineId)
+      .filter(b => {
+        if (!search) return true;
+        const q = search.toLowerCase();
+        return b.name.toLowerCase().includes(q) || b.client.toLowerCase().includes(q);
+      })
+      .sort((a, b) => a.order_index - b.order_index);
+  }, [batches, search]);
+
+  // ─ DnD Board handlers ─
+  const [activeDrag, setActiveDrag] = useState<BatchFromDB | null>(null);
+
+  const handleDragStart = (e: DragStartEvent) => {
+    const b = batches.find(x => x.id === e.active.id);
+    if (b) setActiveDrag(b);
+  };
+
+  const handleDragOver = (e: DragOverEvent) => {
+    const { over } = e;
+    if (!over) { setOverId(null); return; }
+
+    // over может быть id батча или id линии (дроп-зона)
+    const overBatch = batches.find(b => b.id === over.id);
+    if (overBatch) {
+      setOverId(overBatch.line_id);
+    } else {
+      // over.id — это id линии
+      const lineExists = LINES.find(l => l.id === over.id);
+      if (lineExists) setOverId(lineExists.id);
+    }
+  };
+
+  const handleDragEnd = async (e: DragEndEvent) => {
+    setActiveDrag(null);
+    setOverId(null);
+    const { active, over } = e;
+    if (!over) return;
+
+    const draggedBatch = batches.find(b => b.id === active.id);
+    if (!draggedBatch) return;
+
+    const overBatch = batches.find(b => b.id === over.id);
+    const targetLineId = overBatch ? overBatch.line_id : (LINES.find(l => l.id === over.id)?.id ?? draggedBatch.line_id);
+    const oldLineId = draggedBatch.line_id;
+
+    // Собираем новый порядок на целевой линии
+    const targetBatches = batches.filter(b => b.line_id === targetLineId);
+
+    let reordered: BatchFromDB[];
+    if (oldLineId === targetLineId) {
+      const oldIdx = targetBatches.findIndex(b => b.id === active.id);
+      const newIdx = overBatch ? targetBatches.findIndex(b => b.id === over.id) : targetBatches.length - 1;
+      if (oldIdx === newIdx) return;
+      reordered = arrayMove(targetBatches, oldIdx, newIdx).map((b, i) => ({ ...b, order_index: i }));
+    } else {
+      // Перенос между линиями
+      const insertIdx = overBatch ? targetBatches.findIndex(b => b.id === over.id) : targetBatches.length;
+      const withoutDragged = targetBatches.filter(b => b.id !== draggedBatch.id);
+      const moved = { ...draggedBatch, line_id: targetLineId };
+      withoutDragged.splice(insertIdx, 0, moved);
+      reordered = withoutDragged.map((b, i) => ({ ...b, order_index: i }));
+    }
+
+    // Оптимистичное обновление
+    setBatches(prev => {
+      const kept = prev.filter(b => b.line_id !== targetLineId && b.id !== draggedBatch.id);
+      const oldLineUpdated = oldLineId !== targetLineId
+        ? prev.filter(b => b.line_id === oldLineId && b.id !== draggedBatch.id)
+            .map((b, i) => ({ ...b, order_index: i }))
+        : [];
+      return [...kept, ...oldLineUpdated, ...reordered];
     });
 
+    // Сохраняем
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    saveTimeout.current = setTimeout(async () => {
+      setSaving(true);
+      try {
+        await reorderApi.batches({
+          batch_id: draggedBatch.id,
+          new_line_id: targetLineId,
+          ordered_ids: reordered.map(b => b.id),
+          old_line_id: oldLineId !== targetLineId ? oldLineId : undefined,
+        });
+        // Перезагружаем для актуальных start/end времён
+        const fresh = await batchesApi.list();
+        setBatches(fresh.sort((a, b) => a.order_index - b.order_index));
+      } catch {
+        // Откат при ошибке
+        load();
+      } finally {
+        setSaving(false);
+      }
+    }, 300);
+  };
+
+  const visibleLines = LINES.filter(l => lineFilter === 'all' || l.id === lineFilter);
   const visibleBatches = lineFilter === 'all'
     ? batches.filter(b => {
         if (!search) return true;
         const q = search.toLowerCase();
         return b.name.toLowerCase().includes(q) || b.client.toLowerCase().includes(q);
       })
-    : getForLine(lineFilter).filter(b => {
-        if (!search) return true;
-        const q = search.toLowerCase();
-        return b.name.toLowerCase().includes(q) || b.client.toLowerCase().includes(q);
-      });
-
-  const visibleLines = LINES.filter(l => lineFilter === 'all' || l.id === lineFilter);
+    : getBatchesForLine(lineFilter);
 
   return (
     <div className="p-6 animate-fade-in">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 mb-5">
-        {/* Фильтр линий */}
-        <div className="flex gap-1.5">
+        <div className="flex gap-1 flex-wrap">
           <button onClick={() => setLineFilter('all')}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${lineFilter === 'all' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'}`}>
-            Все линии
+            Все
           </button>
           {LINES.map(l => (
             <button key={l.id} onClick={() => setLineFilter(l.id)}
@@ -468,24 +750,25 @@ export default function Production({ search }: { search: string }) {
         </div>
 
         <div className="flex items-center gap-1.5 ml-auto">
-          {/* Переключатель вида */}
+          {saving && (
+            <span className="flex items-center gap-1.5 text-xs text-primary">
+              <div className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              Пересчёт...
+            </span>
+          )}
           <div className="flex items-center bg-secondary rounded-md p-0.5">
-            <button onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all ${viewMode === 'table' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              <Icon name="Table" size={12} />
-              Таблица
-            </button>
             <button onClick={() => setViewMode('board')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all ${viewMode === 'board' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              <Icon name="Columns" size={12} />
-              Колонки
+              <Icon name="Columns" size={12} />Колонки
+            </button>
+            <button onClick={() => setViewMode('table')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all ${viewMode === 'table' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+              <Icon name="Table" size={12} />Таблица
             </button>
           </div>
-
           <button onClick={load}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-muted-foreground hover:text-foreground rounded-md text-xs transition-colors">
-            <Icon name="RefreshCw" size={12} />
-            Обновить
+            <Icon name="RefreshCw" size={12} />Обновить
           </button>
         </div>
       </div>
@@ -494,59 +777,36 @@ export default function Production({ search }: { search: string }) {
         <div className="flex items-center justify-center py-24 text-muted-foreground">
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-            <span className="text-sm">Загрузка расписания...</span>
+            <span className="text-sm">Загрузка...</span>
           </div>
         </div>
       ) : viewMode === 'table' ? (
-        <TableView batches={visibleBatches} search="" onSelect={setSelected} />
+        <TableView batches={visibleBatches} onSelect={setSelected} onBatchesReorder={setBatches} />
       ) : (
-        /* Board view */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {visibleLines.map(line => {
-            const lineBatches = getForLine(line.id).filter(b => {
-              if (!search) return true;
-              const q = search.toLowerCase();
-              return b.name.toLowerCase().includes(q) || b.client.toLowerCase().includes(q);
-            });
-            const totalMins = lineBatches.reduce((s, b) => s + totalMinutes(b), 0);
-            const loadPct = Math.min(100, (totalMins / (24 * 60)) * 100);
-            const activeBatch = lineBatches.find(b => isActive(b));
-
-            return (
-              <div key={line.id} className="rounded-xl border border-border bg-card overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-secondary/30">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${activeBatch ? 'bg-primary pulse-glow' : 'bg-border'}`} />
-                    <span className="text-sm font-semibold text-foreground">{line.name}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-[10px] text-muted-foreground font-mono-vpk">{line.speed.toLocaleString('ru')}/ч</div>
-                    <div className="flex items-center gap-1.5 text-[10px]">
-                      <div className="w-16 h-1 bg-border rounded-full overflow-hidden">
-                        <div className="h-full bg-primary rounded-full" style={{ width: `${loadPct}%` }} />
-                      </div>
-                      <span className="text-muted-foreground font-mono-vpk">{loadPct.toFixed(0)}%</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-3 space-y-2.5 min-h-[200px]">
-                  {lineBatches.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-32 text-muted-foreground/40 text-xs">
-                      <Icon name="Calendar" size={24} className="mb-2 opacity-30" />
-                      Нет партий
-                    </div>
-                  ) : lineBatches.map(batch => (
-                    <BatchCard key={batch.id} batch={batch} onSelect={() => setSelected(batch)} />
-                  ))}
-                </div>
-                <div className="px-4 py-2.5 border-t border-border bg-secondary/20 flex justify-between text-[10px] text-muted-foreground font-mono-vpk">
-                  <span>Партий: {lineBatches.length}</span>
-                  <span>{Math.floor(totalMins / 60)}ч {totalMins % 60}м</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        /* Board view with global DnD */
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {visibleLines.map(line => (
+              <DroppableColumn
+                key={line.id}
+                line={line}
+                batches={getBatchesForLine(line.id)}
+                onSelect={setSelected}
+                isDraggingOver={overId === line.id && activeDrag?.line_id !== line.id}
+                isDragging={!!activeDrag}
+              />
+            ))}
+          </div>
+          <DragOverlay dropAnimation={{ duration: 200, easing: 'ease' }}>
+            {activeDrag && <DragCard batch={activeDrag} />}
+          </DragOverlay>
+        </DndContext>
       )}
 
       {!loading && batches.length === 0 && (

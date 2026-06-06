@@ -10,7 +10,7 @@ SCHEMA = "t_p55602185_app_creation_project"
 BATCH_COLS = [
     "id", "order_id", "name", "client", "sku", "quantity", "speed",
     "cleaning_time", "line_id", "color", "status", "start_time", "end_time",
-    "created_at", "updated_at"
+    "order_index", "created_at", "updated_at"
 ]
 
 
