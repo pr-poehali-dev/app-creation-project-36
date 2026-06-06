@@ -4,13 +4,13 @@ import { batchesApi, type BatchFromDB } from '@/api/client';
 
 const LINES = [
   { id: 'line-1', name: 'Элеваторная', speed: 9100 },
-  { id: 'line-2', name: 'Линия №2', speed: 1800 },
+  { id: 'line-2', name: 'Ленина', speed: 9100 },
   { id: 'line-3', name: 'Линия №3', speed: 2400 },
 ];
 
 const LINE_MAP: Record<string, string> = {
   'line-1': 'Элеваторная',
-  'line-2': 'Линия №2',
+  'line-2': 'Ленина',
   'line-3': 'Линия №3',
 };
 
