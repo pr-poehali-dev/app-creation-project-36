@@ -74,7 +74,7 @@ export default function Index() {
         <Header section={section} search={search} onSearch={setSearch} />
 
         {/* Scrollable content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden w-full min-w-0">
           {renderSection()}
         </main>
       </div>

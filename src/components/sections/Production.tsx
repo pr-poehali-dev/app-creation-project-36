@@ -101,12 +101,12 @@ function totalMinutes(batch: BatchFromDB): number {
 // ─── Drag Overlay Card (ghost while dragging) ───
 function DragCard({ batch }: { batch: BatchFromDB }) {
   return (
-    <div className="rounded-lg border-2 border-primary/60 bg-card/95 p-3 shadow-2xl w-64 rotate-2 opacity-90">
+    <div className="rounded-lg border-2 border-primary/60 bg-card/95 p-3 shadow-2xl w-56 max-w-[90vw] rotate-2 opacity-90">
       <div className="flex items-center gap-2 mb-1">
         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: batch.color || '#0ea5e9' }} />
         <div className="text-sm font-semibold text-foreground truncate">{batch.name}</div>
       </div>
-      <div className="text-[11px] text-muted-foreground">{batch.client}</div>
+      <div className="text-[11px] text-muted-foreground truncate">{batch.client}</div>
       <div className="text-[11px] font-mono-vpk text-muted-foreground mt-1">
         {batch.quantity.toLocaleString('ru')} шт · {batch.speed.toLocaleString('ru')}/ч
       </div>
@@ -144,7 +144,7 @@ function SortableBatchCard({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className={`relative rounded-lg border p-3 transition-all duration-150 ${
+      className={`relative rounded-lg border p-3 transition-all duration-150 w-full min-w-0 overflow-hidden ${
         selfDragging ? 'border-primary/30 bg-secondary/20' :
         active ? 'border-primary/50 bg-primary/5' :
         'border-border bg-secondary/30 hover:border-primary/30 hover:bg-secondary/50'
@@ -168,12 +168,12 @@ function SortableBatchCard({
 
       <div
         onClick={onSelect}
-        className="flex items-start gap-2 mb-2 pr-8 pt-1 cursor-pointer"
+        className="flex items-start gap-2 mb-2 pr-8 pt-1 cursor-pointer min-w-0"
       >
         <div className="w-2.5 h-2.5 rounded-full mt-0.5 shrink-0" style={{ background: batch.color || '#0ea5e9' }} />
-        <div>
-          <div className="text-sm font-semibold text-foreground leading-tight">{batch.name}</div>
-          <div className="text-[11px] text-muted-foreground">{batch.client}</div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-foreground leading-tight break-words">{batch.name}</div>
+          <div className="text-[11px] text-muted-foreground truncate">{batch.client}</div>
         </div>
       </div>
 
@@ -238,7 +238,7 @@ function DroppableColumn({
   const activeBatch = batches.find(b => isActive(b));
 
   return (
-    <div className={`rounded-xl border transition-all duration-200 overflow-hidden ${
+    <div className={`rounded-xl border transition-all duration-200 overflow-hidden w-full min-w-0 ${
       isDraggingOver
         ? 'border-primary/60 bg-primary/5 shadow-lg shadow-primary/10'
         : 'border-border bg-card'
@@ -448,27 +448,28 @@ function TableView({
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{filtered.length} партий</span>
+    <div className="w-full min-w-0 max-w-full overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs text-muted-foreground shrink-0">{filtered.length} партий</span>
           {saving && (
-            <span className="flex items-center gap-1 text-[10px] text-primary">
+            <span className="flex items-center gap-1 text-[10px] text-primary shrink-0">
               <div className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-              Сохраняю...
+              <span className="hidden sm:inline">Сохраняю...</span>
             </span>
           )}
         </div>
         <button onClick={() => setShowDone(p => !p)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all ${showDone ? 'bg-primary/15 border border-primary/30 text-primary' : 'bg-secondary text-muted-foreground hover:text-foreground'}`}>
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all shrink-0 ${showDone ? 'bg-primary/15 border border-primary/30 text-primary' : 'bg-secondary text-muted-foreground hover:text-foreground'}`}>
           <Icon name={showDone ? 'EyeOff' : 'Eye'} size={12} />
-          {showDone ? 'Скрыть выполненные' : 'Показать выполненные'}
+          <span className="hidden sm:inline">{showDone ? 'Скрыть выполненные' : 'Показать выполненные'}</span>
+          <span className="sm:hidden">{showDone ? 'Скрыть' : 'Выполненные'}</span>
         </button>
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="rounded-lg border border-border overflow-hidden">
-          <table className="w-full">
+        <div className="rounded-lg border border-border overflow-x-auto">
+          <table className="w-full min-w-[640px]">
             <thead>
               <tr className="bg-secondary/40 border-b border-border">
                 <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide w-12">#</th>
@@ -521,24 +522,28 @@ function BatchDetail({ batch, onClose }: { batch: BatchFromDB; onClose: () => vo
   const productionMin = Math.ceil((batch.quantity / batch.speed) * 60);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-      <div className="bg-card border border-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-slide-up shadow-2xl">
-        <div className="flex items-start justify-between p-5 border-b border-border">
-          <div>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+      <div className="bg-card border border-border rounded-t-2xl sm:rounded-xl w-full max-w-lg max-h-[92vh] overflow-y-auto animate-slide-up shadow-2xl">
+        {/* Мобильный handle */}
+        <div className="flex sm:hidden justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-border" />
+        </div>
+        <div className="flex items-start justify-between px-4 sm:px-5 py-3 sm:py-5 border-b border-border">
+          <div className="min-w-0 flex-1 mr-3">
             <div className="flex items-center gap-2 mb-1">
-              <div className="w-3 h-3 rounded-full" style={{ background: batch.color || '#0ea5e9' }} />
-              <h2 className="text-base font-bold text-foreground">{batch.name}</h2>
+              <div className="w-3 h-3 rounded-full shrink-0" style={{ background: batch.color || '#0ea5e9' }} />
+              <h2 className="text-base font-bold text-foreground leading-tight break-words">{batch.name}</h2>
             </div>
-            <div className="text-sm text-muted-foreground">
-              {batch.client} · {batch.sku} · {LINE_MAP[batch.line_id] || batch.line_id}
+            <div className="text-sm text-muted-foreground truncate">
+              {batch.client} · {LINE_MAP[batch.line_id] || batch.line_id}
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground">
+          <button onClick={onClose} className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground shrink-0">
             <Icon name="X" size={15} />
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="px-4 sm:px-5 py-4 sm:py-5 space-y-4">
           {isActive(batch) && (
             <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
               <div className="flex justify-between text-xs mb-2">
@@ -557,7 +562,7 @@ function BatchDetail({ batch, onClose }: { batch: BatchFromDB; onClose: () => vo
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {[
               { label: 'Объём', value: batch.quantity.toLocaleString('ru'), unit: 'шт' },
               { label: 'Скорость', value: batch.speed.toLocaleString('ru'), unit: '/ч' },
@@ -733,44 +738,48 @@ export default function Production({ search }: { search: string }) {
     : getBatchesForLine(lineFilter);
 
   return (
-    <div className="p-6 animate-fade-in">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 mb-5">
-        <div className="flex gap-1 flex-wrap">
-          <button onClick={() => setLineFilter('all')}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${lineFilter === 'all' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'}`}>
-            Все
+    <div className="px-4 md:px-6 py-4 md:py-6 animate-fade-in w-full min-w-0 max-w-full overflow-hidden">
+      {/* Toolbar — строка 1: фильтр линий */}
+      <div className="flex flex-wrap gap-1.5 mb-3 min-w-0">
+        <button onClick={() => setLineFilter('all')}
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all shrink-0 ${lineFilter === 'all' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'}`}>
+          Все
+        </button>
+        {LINES.map(l => (
+          <button key={l.id} onClick={() => setLineFilter(l.id)}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all shrink-0 ${lineFilter === l.id ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'}`}>
+            {l.name}
           </button>
-          {LINES.map(l => (
-            <button key={l.id} onClick={() => setLineFilter(l.id)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${lineFilter === l.id ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:text-foreground'}`}>
-              {l.name}
-            </button>
-          ))}
+        ))}
+      </div>
+
+      {/* Toolbar — строка 2: переключатель вида + кнопки */}
+      <div className="flex flex-wrap items-center gap-2 mb-5 min-w-0">
+        <div className="flex items-center bg-secondary rounded-md p-0.5 shrink-0">
+          <button onClick={() => setViewMode('board')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-all ${viewMode === 'board' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Icon name="Columns" size={12} />
+            <span className="hidden sm:inline">Колонки</span>
+          </button>
+          <button onClick={() => setViewMode('table')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-all ${viewMode === 'table' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Icon name="Table" size={12} />
+            <span className="hidden sm:inline">Таблица</span>
+          </button>
         </div>
 
-        <div className="flex items-center gap-1.5 ml-auto">
-          {saving && (
-            <span className="flex items-center gap-1.5 text-xs text-primary">
-              <div className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-              Пересчёт...
-            </span>
-          )}
-          <div className="flex items-center bg-secondary rounded-md p-0.5">
-            <button onClick={() => setViewMode('board')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all ${viewMode === 'board' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              <Icon name="Columns" size={12} />Колонки
-            </button>
-            <button onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all ${viewMode === 'table' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              <Icon name="Table" size={12} />Таблица
-            </button>
-          </div>
-          <button onClick={load}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-muted-foreground hover:text-foreground rounded-md text-xs transition-colors">
-            <Icon name="RefreshCw" size={12} />Обновить
-          </button>
-        </div>
+        <button onClick={load}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-secondary text-muted-foreground hover:text-foreground rounded-md text-xs transition-colors shrink-0">
+          <Icon name="RefreshCw" size={12} />
+          <span className="hidden sm:inline">Обновить</span>
+        </button>
+
+        {saving && (
+          <span className="flex items-center gap-1.5 text-xs text-primary ml-auto">
+            <div className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <span className="hidden sm:inline">Пересчёт...</span>
+          </span>
+        )}
       </div>
 
       {loading ? (
@@ -791,7 +800,7 @@ export default function Production({ search }: { search: string }) {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 w-full min-w-0">
             {visibleLines.map(line => (
               <DroppableColumn
                 key={line.id}

@@ -63,11 +63,21 @@
     @apply border-border;
   }
 
+  html,
   body {
     @apply bg-background text-foreground font-golos;
     font-feature-settings:
       "kern" 1,
       "liga" 1;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  #root {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
   }
 
   ::-webkit-scrollbar {
