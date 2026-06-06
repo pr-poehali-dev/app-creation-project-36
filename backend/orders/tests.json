@@ -1,0 +1,42 @@
+{
+  "tests": [
+    {
+      "name": "GET /orders — пустой список",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": [],
+      "bodyMatcher": "exact"
+    },
+    {
+      "name": "POST /orders — создать заказ",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "client": "Тест Клиент",
+        "drink_name": "Лимонад Тест",
+        "sku": "Лимонад Тест 0.33л",
+        "can_format": "0.33",
+        "packaging_type": "sleeve",
+        "quantity": 10000,
+        "planned_production_date": "2026-06-10",
+        "planned_shipment_date": "2026-06-12",
+        "line_id": "line-1",
+        "line_speed": 2000,
+        "cleaning_time": 30,
+        "manager": "Тест Менеджер",
+        "comment": "тест"
+      },
+      "expectedStatus": 201,
+      "expectedBody": {"order": {"client": "string"}, "batch": {"line_id": "string"}},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET /orders — список после создания",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}

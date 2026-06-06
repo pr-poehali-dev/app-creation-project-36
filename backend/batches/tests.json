@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "name": "GET /batches — список партий",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
