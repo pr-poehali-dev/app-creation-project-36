@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Icon from '@/components/ui/icon';
 import { ordersApi, type OrderFromDB, type OrderCreatePayload } from '@/api/client';
 import OrderForm from '@/components/orders/OrderForm';
+import MaterialCheckBlock from '@/components/orders/MaterialCheckBlock';
 
 const STATUS_FLOW = [
   'new', 'check_materials', 'ready', 'in_production', 'produced', 'in_stock', 'shipped'
@@ -71,12 +72,13 @@ function DeleteDialog({ order, onConfirm, onCancel, loading }: {
 }
 
 // Детальная карточка заказа
-function OrderDetail({ order, onClose, onEdit, onDelete, onStatusChange }: {
+function OrderDetail({ order, onClose, onEdit, onDelete, onStatusChange, onReload }: {
   order: OrderFromDB;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onStatusChange: (status: string) => void;
+  onReload: () => void;
 }) {
   const statusIdx = STATUS_FLOW.indexOf(order.status);
   const daysLeft = Math.ceil((new Date(order.planned_shipment_date).getTime() - Date.now()) / 86400000);
@@ -84,7 +86,7 @@ function OrderDetail({ order, onClose, onEdit, onDelete, onStatusChange }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-card border border-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-slide-up shadow-2xl">
+      <div className="bg-card border border-border rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-slide-up shadow-2xl">
         <div className="flex items-start justify-between p-5 border-b border-border">
           <div>
             <div className="font-mono-vpk text-xs text-primary mb-1">{order.number}</div>
@@ -169,6 +171,9 @@ function OrderDetail({ order, onClose, onEdit, onDelete, onStatusChange }: {
               {order.comment}
             </div>
           )}
+
+          {/* Блок проверки сырья */}
+          <MaterialCheckBlock order={order} onStatusChange={onReload} />
         </div>
       </div>
     </div>
@@ -330,9 +335,23 @@ export default function Orders({ search }: { search: string }) {
                     {dl <= 0 && <div className="text-[10px] text-red-500 font-bold">просрочен</div>}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`status-badge ${STATUS_COLORS[o.status] || 'bg-slate-500/20 text-slate-300'}`}>
-                      {STATUS_LABELS[o.status] || o.status}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span className={`status-badge ${STATUS_COLORS[o.status] || 'bg-slate-500/20 text-slate-300'}`}>
+                        {STATUS_LABELS[o.status] || o.status}
+                      </span>
+                      {o.status === 'check_materials' && (
+                        <span className="flex items-center gap-1 text-[10px] text-red-400">
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                          нехватка сырья
+                        </span>
+                      )}
+                      {o.status === 'ready' && (
+                        <span className="flex items-center gap-1 text-[10px] text-emerald-400">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          сырьё готово
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
@@ -395,6 +414,7 @@ export default function Orders({ search }: { search: string }) {
           onEdit={() => { setEditOrder(selected); setShowForm(true); }}
           onDelete={() => setDeleteTarget(selected)}
           onStatusChange={(status) => handleStatusChange(selected, status)}
+          onReload={load}
         />
       )}
 

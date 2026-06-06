@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "name": "GET /materials — список материалов",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}

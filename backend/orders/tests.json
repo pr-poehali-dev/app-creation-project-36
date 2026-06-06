@@ -1,12 +1,11 @@
 {
   "tests": [
     {
-      "name": "GET /orders — пустой список",
+      "name": "GET /orders — список заказов",
       "method": "GET",
       "path": "/",
       "expectedStatus": 200,
-      "expectedBody": [],
-      "bodyMatcher": "exact"
+      "bodyMatcher": "partial"
     },
     {
       "name": "POST /orders — создать заказ",
@@ -28,7 +27,7 @@
         "comment": "тест"
       },
       "expectedStatus": 201,
-      "expectedBody": {"order": {"client": "string"}, "batch": {"line_id": "string"}},
+      "expectedBody": {"order": {"client": "string"}, "batch": {"line_id": "string"}, "materials": {"all_available": true}},
       "bodyMatcher": "partial"
     },
     {
