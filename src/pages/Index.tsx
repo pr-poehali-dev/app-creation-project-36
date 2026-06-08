@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import Dashboard from '@/components/sections/Dashboard';
+import ClientProjects from '@/components/sections/ClientProjects';
 import Orders from '@/components/sections/Orders';
 import Production from '@/components/sections/Production';
 import Materials from '@/components/sections/Materials';
@@ -18,6 +19,7 @@ export default function Index() {
   const renderSection = () => {
     switch (section) {
       case 'dashboard': return <Dashboard />;
+      case 'clients': return <ClientProjects search={search} />;
       case 'orders': return <Orders search={search} />;
       case 'production': return <Production search={search} />;
       case 'materials': return <Materials search={search} />;

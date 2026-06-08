@@ -10,6 +10,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Обзор', icon: 'LayoutDashboard' },
+  { id: 'clients', label: 'Клиенты', icon: 'Handshake' },
   { id: 'orders', label: 'Заказы', icon: 'ClipboardList', badge: 3 },
   { id: 'production', label: 'Производство', icon: 'Factory' },
   { id: 'materials', label: 'Сырьё', icon: 'Package' },

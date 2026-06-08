@@ -2,6 +2,7 @@ const ORDERS_URL = 'https://functions.poehali.dev/9219b44f-8281-497f-a1ba-dffc09
 const BATCHES_URL = 'https://functions.poehali.dev/cd44fb15-1abb-46a6-95b3-7bc41c9bd733';
 const MATERIALS_URL = 'https://functions.poehali.dev/7c14d9a2-e67f-4257-a70f-5cd1aab59c85';
 const REORDER_URL = 'https://functions.poehali.dev/cd57421d-4b23-45e6-8c75-267ca44c0c73';
+const CLIENTS_URL = 'https://functions.poehali.dev/82312fbf-ba01-4806-8336-278f71717014';
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(url, {
@@ -165,6 +166,195 @@ export const batchesApi = {
     const qs = lineId ? `?line_id=${lineId}` : '';
     return request<BatchFromDB[]>(`${BATCHES_URL}/${qs}`);
   },
+};
+
+// ─── Client Projects types ───────────────────────────────────────────────────
+
+export interface ClientProject {
+  id: string;
+  number: string;
+  client: string;
+  brand: string | null;
+  drink_name: string;
+  flavor: string | null;
+  can_volume: string | null;
+  can_format: string | null;
+  label_type: string | null;
+  sku_count: number;
+  batch_volume: number | null;
+  contact_person: string | null;
+  manager: string | null;
+  deadline: string | null;
+  comment: string | null;
+  stage: string;
+  readiness_pct: number;
+  is_ready: boolean;
+  production_order_id: string | null;
+  created_at: string;
+  updated_at: string;
+  readiness?: ProjectReadiness | null;
+}
+
+export interface ProjectReadiness {
+  id: string;
+  project_id: string;
+  recipe_approved: boolean;
+  raw_ordered: boolean;
+  raw_delivered: boolean;
+  design_at_factory: boolean;
+  can_shipped: boolean;
+  declaration_ready: boolean;
+  samples_sent: boolean;
+  client_approved: boolean;
+  updated_at: string;
+}
+
+export interface ProjectRecipeItem {
+  id: string;
+  project_id: string;
+  ingredient: string;
+  dosage: number;
+  unit: string;
+  supplier: string | null;
+  price_per_unit: number | null;
+  lead_days: number | null;
+  order_idx: number;
+  created_at: string;
+}
+
+export interface ProjectDesign {
+  id: string;
+  project_id: string;
+  version: string;
+  file_name: string | null;
+  file_url: string | null;
+  recognized_text: string | null;
+  status: string;
+  uploaded_by: string | null;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectFactorySetup {
+  id: string;
+  project_id: string;
+  factory: string;
+  sent_at: string | null;
+  responsible: string | null;
+  planned_ready: string | null;
+  actual_ready: string | null;
+  status: string;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectDeclaration {
+  id: string;
+  project_id: string;
+  decl_type: string;
+  samples_sent_at: string | null;
+  docs_submitted_at: string | null;
+  planned_ready: string | null;
+  actual_ready: string | null;
+  status: string;
+  lab: string | null;
+  tracking_number: string | null;
+  file_url: string | null;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectPurchase {
+  id: string;
+  project_id: string;
+  ingredient: string;
+  needed: number | null;
+  in_stock: number;
+  reserved: number;
+  shortage: number | null;
+  unit: string | null;
+  supplier: string | null;
+  status: string;
+  order_date: string | null;
+  planned_delivery: string | null;
+  actual_delivery: string | null;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectCan {
+  id: string;
+  project_id: string;
+  factory: string;
+  can_format: string | null;
+  can_volume: string | null;
+  design_sent_at: string | null;
+  design_registered_at: string | null;
+  can_ordered_at: string | null;
+  planned_shipment: string | null;
+  actual_shipment: string | null;
+  status: string;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const clientProjectsApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<ClientProject[]>(`${CLIENTS_URL}/${qs}`);
+  },
+  get: (id: string) => request<ClientProject>(`${CLIENTS_URL}/${id}`),
+  create: (data: Partial<ClientProject>) =>
+    request<ClientProject>(`${CLIENTS_URL}/`, { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<ClientProject>) =>
+    request<ClientProject>(`${CLIENTS_URL}/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    request<{ deleted: string }>(`${CLIENTS_URL}/${id}`, { method: 'DELETE' }),
+
+  // Sub-resources
+  getRecipe: (id: string) => request<ProjectRecipeItem[]>(`${CLIENTS_URL}/${id}/recipe`),
+  addRecipeItem: (id: string, item: Partial<ProjectRecipeItem>) =>
+    request<ProjectRecipeItem>(`${CLIENTS_URL}/${id}/recipe`, { method: 'POST', body: JSON.stringify(item) }),
+  deleteRecipeItem: (id: string, itemId: string) =>
+    request<{ deleted: string }>(`${CLIENTS_URL}/${id}/recipe`, {
+      method: 'DELETE', body: JSON.stringify({ item_id: itemId }),
+    }),
+
+  getDesigns: (id: string) => request<ProjectDesign[]>(`${CLIENTS_URL}/${id}/design`),
+  createDesign: (id: string, data: Partial<ProjectDesign>) =>
+    request<ProjectDesign>(`${CLIENTS_URL}/${id}/design`, { method: 'POST', body: JSON.stringify(data) }),
+  updateDesign: (id: string, data: Partial<ProjectDesign> & { design_id: string }) =>
+    request<ProjectDesign>(`${CLIENTS_URL}/${id}/design`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  getFactorySetup: (id: string) => request<ProjectFactorySetup>(`${CLIENTS_URL}/${id}/factory-setup`),
+  saveFactorySetup: (id: string, data: Partial<ProjectFactorySetup>) =>
+    request<ProjectFactorySetup>(`${CLIENTS_URL}/${id}/factory-setup`, { method: 'POST', body: JSON.stringify(data) }),
+
+  getDeclaration: (id: string) => request<ProjectDeclaration>(`${CLIENTS_URL}/${id}/declaration`),
+  saveDeclaration: (id: string, data: Partial<ProjectDeclaration>) =>
+    request<ProjectDeclaration>(`${CLIENTS_URL}/${id}/declaration`, { method: 'POST', body: JSON.stringify(data) }),
+
+  getPurchases: (id: string) => request<ProjectPurchase[]>(`${CLIENTS_URL}/${id}/purchases`),
+  savePurchase: (id: string, data: Partial<ProjectPurchase>) =>
+    request<ProjectPurchase>(`${CLIENTS_URL}/${id}/purchases`, { method: 'POST', body: JSON.stringify(data) }),
+
+  getCan: (id: string) => request<ProjectCan>(`${CLIENTS_URL}/${id}/can`),
+  saveCan: (id: string, data: Partial<ProjectCan>) =>
+    request<ProjectCan>(`${CLIENTS_URL}/${id}/can`, { method: 'POST', body: JSON.stringify(data) }),
+
+  getReadiness: (id: string) => request<ProjectReadiness>(`${CLIENTS_URL}/${id}/readiness`),
+  updateReadiness: (id: string, data: Partial<ProjectReadiness>) =>
+    request<ProjectReadiness>(`${CLIENTS_URL}/${id}/readiness`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  sendToProduction: (id: string, data: { line_id: string; line_speed: number; cleaning_time: number; planned_production_date?: string; planned_shipment_date?: string }) =>
+    request<{ order_id: string; batch_id: string; order_number: string }>(`${CLIENTS_URL}/${id}/send-to-production`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
 };
 
 export const materialsApi = {

@@ -158,4 +158,5 @@ export type AppSection =
   | 'materials'
   | 'warehouse'
   | 'quality'
-  | 'shipments';
+  | 'shipments'
+  | 'clients';

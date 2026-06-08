@@ -4,6 +4,7 @@ import type { AppSection } from '@/types/erp';
 
 const SECTION_TITLES: Record<AppSection, { title: string; subtitle: string }> = {
   dashboard: { title: 'Обзор производства', subtitle: 'Ключевые показатели и текущий статус' },
+  clients: { title: 'Работа с клиентами', subtitle: 'Проекты от переговоров до запуска в производство' },
   orders: { title: 'Заказы клиентов', subtitle: 'Управление заказами и клиентами' },
   production: { title: 'План производства', subtitle: 'Расписание линий и партии розлива' },
   materials: { title: 'Сырьё и материалы', subtitle: 'Остатки, нормы расхода, закупки' },
