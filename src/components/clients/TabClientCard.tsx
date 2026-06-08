@@ -187,7 +187,7 @@ export default function TabClientCard({ project }: { project: ClientProject }) {
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   // Редактируемые поля
-  const [fields, setFields] = useState<Record<string, string>>({});
+  const [fields, setFields] = useState<Record<string, string>>({ can_label_type: 'Литография' });
   const [skus, setSkus] = useState<SkuRow[]>([]);
   const [fileName, setFileName] = useState('');
 
@@ -209,6 +209,7 @@ export default function TabClientCard({ project }: { project: ClientProject }) {
     FIELD_MAP.forEach(({ field }) => {
       f[field] = (c as unknown as Record<string, string>)[field] || '';
     });
+    if (!f.can_label_type) f.can_label_type = 'Литография';
     setFields(f);
     setSkus(c.skus || []);
     setFileName(c.file_name || '');
@@ -251,6 +252,7 @@ export default function TabClientCard({ project }: { project: ClientProject }) {
       FIELD_MAP.forEach(({ field }) => {
         newFields[field] = parsed[field] || '';
       });
+      if (!newFields.can_label_type) newFields.can_label_type = 'Литография';
       setFields(newFields);
       setSkus(parsedSkus);
       setFileName(file.name);
