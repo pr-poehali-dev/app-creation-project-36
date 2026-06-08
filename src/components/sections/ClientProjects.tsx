@@ -11,6 +11,7 @@ import {
   type ProjectCan,
   type ProjectReadiness,
 } from '@/api/client';
+import TabClientCard from '@/components/clients/TabClientCard';
 
 // ─── Константы ───────────────────────────────────────────────────────────────
 
@@ -984,6 +985,7 @@ function TabReadiness({ project, onUpdated }: { project: ClientProject; onUpdate
 
 const TABS = [
   { id: 'info',     label: 'Обзор',       icon: 'LayoutList' },
+  { id: 'client_card', label: 'Карточка', icon: 'FileSpreadsheet' },
   { id: 'recipe',   label: 'Рецептура',   icon: 'FlaskConical' },
   { id: 'design',   label: 'Дизайн',      icon: 'Palette' },
   { id: 'factory',  label: 'Завод банки', icon: 'Building2' },
@@ -1135,6 +1137,7 @@ function ProjectCard({
               </div>
             </div>
           )}
+          {tab === 'client_card' && <TabClientCard project={project} />}
           {tab === 'recipe'   && <TabRecipe project={project} />}
           {tab === 'design'   && <TabDesign project={project} />}
           {tab === 'factory'  && <TabFactorySetup project={project} />}

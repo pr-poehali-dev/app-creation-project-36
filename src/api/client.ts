@@ -3,6 +3,7 @@ const BATCHES_URL = 'https://functions.poehali.dev/cd44fb15-1abb-46a6-95b3-7bc41
 const MATERIALS_URL = 'https://functions.poehali.dev/7c14d9a2-e67f-4257-a70f-5cd1aab59c85';
 const REORDER_URL = 'https://functions.poehali.dev/cd57421d-4b23-45e6-8c75-267ca44c0c73';
 const CLIENTS_URL = 'https://functions.poehali.dev/82312fbf-ba01-4806-8336-278f71717014';
+const UPLOAD_CARD_URL = 'https://functions.poehali.dev/38449307-3585-45a0-91e6-57c61e5ab855';
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(url, {
@@ -302,6 +303,58 @@ export interface ProjectCan {
   created_at: string;
   updated_at: string;
 }
+
+export interface ProjectClientCard {
+  id: string;
+  project_id: string;
+  file_name: string | null;
+  file_url: string | null;
+  legal_name: string | null;
+  short_name: string | null;
+  location: string | null;
+  legal_address: string | null;
+  director: string | null;
+  email: string | null;
+  trademark: string | null;
+  ds_type: string | null;
+  pallet_scheme: string | null;
+  can_label_type: string | null;
+  can_color: string | null;
+  lid_color: string | null;
+  doc_comment: string | null;
+  card_status: string;
+  skus: SkuRow[] | null;
+  parsed_data: Record<string, string> | null;
+  uploaded_at: string | null;
+  uploaded_by: string | null;
+  updated_at: string | null;
+}
+
+export interface SkuRow {
+  num: string;
+  name: string;
+  gost: string;
+  barcode_unit: string;
+  barcode_12x: string;
+}
+
+export const clientCardApi = {
+  get: (projectId: string) =>
+    request<ProjectClientCard | null>(`${UPLOAD_CARD_URL}/${projectId}`),
+  upload: (projectId: string, payload: {
+    file_name?: string;
+    file_b64?: string;
+    parsed_data: Record<string, string>;
+    skus: SkuRow[];
+    uploaded_by?: string;
+  }) =>
+    request<{ card: ProjectClientCard; card_status: string; file_url: string | null }>(
+      `${UPLOAD_CARD_URL}/${projectId}`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+  remove: (projectId: string) =>
+    request<{ deleted: string }>(`${UPLOAD_CARD_URL}/${projectId}`, { method: 'DELETE' }),
+};
 
 export const clientProjectsApi = {
   list: (params?: Record<string, string>) => {
