@@ -350,25 +350,29 @@ export default function TabClientCard({ project }: { project: ClientProject }) {
             </a>
           )}
 
-          <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
-            uploading
-              ? 'bg-primary/40 text-primary-foreground cursor-wait'
-              : 'bg-primary text-primary-foreground hover:bg-primary/90'
-          }`}>
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              uploading
+                ? 'bg-primary/40 text-primary-foreground cursor-wait'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+            }`}
+          >
             {uploading ? (
               <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Читаю файл...</>
             ) : (
               <><Icon name="Upload" size={12} />{card ? 'Заменить файл' : 'Загрузить карточку клиента'}</>
             )}
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              onChange={handleFileChange}
-              disabled={uploading}
-            />
-          </label>
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={handleFileChange}
+          />
         </div>
       </div>
 

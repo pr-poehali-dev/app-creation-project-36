@@ -997,17 +997,19 @@ const TABS = [
 
 function ProjectCard({
   project: initialProject,
+  initialTab,
   onClose,
   onUpdated,
   onDeleted,
 }: {
   project: ClientProject;
+  initialTab?: string;
   onClose: () => void;
   onUpdated: (p: ClientProject) => void;
   onDeleted: (id: string) => void;
 }) {
   const [project, setProject] = useState(initialProject);
-  const [tab, setTab] = useState('info');
+  const [tab, setTab] = useState(initialTab || 'info');
   const [editing, setEditing] = useState(false);
 
   const stageIdx = STAGES.findIndex(s => s.id === project.stage);
@@ -1177,10 +1179,13 @@ export default function ClientProjects({ search }: { search: string }) {
 
   useEffect(() => { load(); }, [load]);
 
+  const [openOnTab, setOpenOnTab] = useState<string | undefined>(undefined);
+
   const handleCreate = async (data: Partial<ClientProject>) => {
     const p = await clientProjectsApi.create(data);
     setProjects(prev => [p, ...prev]);
     setShowForm(false);
+    setOpenOnTab('client_card');
     setSelected(p);
   };
 
@@ -1334,7 +1339,8 @@ export default function ClientProjects({ search }: { search: string }) {
       {selected && (
         <ProjectCard
           project={selected}
-          onClose={() => setSelected(null)}
+          initialTab={openOnTab}
+          onClose={() => { setSelected(null); setOpenOnTab(undefined); }}
           onUpdated={handleUpdated}
           onDeleted={handleDeleted}
         />
